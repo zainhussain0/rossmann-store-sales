@@ -62,6 +62,18 @@ def add_known_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def prepare(train: pd.DataFrame, test: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Add known features to train and test together, then split them again.
+
+    Doing it on the combined frame also keeps category codes identical in
+    both: test has no StateHoliday 'b' or 'c', so categorising it separately
+    would give 'a' a different code than in train.
+    """
+    full = add_known_features(pd.concat([train, test], ignore_index=True))
+    is_train = full["Sales"].notna()
+    return full[is_train].reset_index(drop=True), full[~is_train].reset_index(drop=True)
+
+
 def _add_calendar(df: pd.DataFrame) -> pd.DataFrame:
     d = df["Date"].dt
     df["Year"] = d.year

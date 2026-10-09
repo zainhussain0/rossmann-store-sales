@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from src.models import GroupMedianBaseline
+from src.data import load_all
+from src.features import prepare
+from src.models import GroupMedianBaseline, GradientBoostingModel
+from src.validation import make_folds, split
 
 
 def _train():
@@ -34,3 +37,15 @@ def test_single_key_works():
     m = GroupMedianBaseline(["Store"]).fit(_train())
     test = pd.DataFrame({"Store": [1], "Open": [1]})
     np.testing.assert_array_equal(m.predict(test), [100])
+
+
+def test_gradient_boosting_smoke_on_real_subset():
+    # Small and fast: 20 stores, 20 trees. Checks wiring, not accuracy.
+    train, test = prepare(*load_all())
+    train = train[train["Store"] <= 20]
+    fit_df, val = split(train, make_folds(train["Date"].max(), n_folds=1)[0])
+    model = GradientBoostingModel({"max_iter": 20}).fit(fit_df)
+    pred = model.predict(val)
+    assert len(pred) == len(val) and np.isfinite(pred).all()
+    assert (pred[val["Open"] == 0] == 0).all()
+    assert (pred[val["Open"] == 1] > 0).all()
