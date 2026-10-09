@@ -5,3 +5,4 @@ data/
 *.csv
 .env
 .DS_Store
+.pytest_cache/
