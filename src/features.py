@@ -40,6 +40,16 @@ EVENTS = {
     "Closed": lambda df: df["Open"] == 0,
 }
 
+# Fixed category lists, so a value always gets the same internal code no
+# matter which rows are being processed. Inferring them from the data would
+# give a single store (one StoreType) or test (no StateHoliday 'b'/'c')
+# different codes from the ones the model was trained on.
+CATEGORIES = {
+    "StoreType": ["a", "b", "c", "d"],
+    "Assortment": ["a", "b", "c"],
+    "StateHoliday": ["0", "a", "b", "c"],
+}
+
 
 def add_known_features(df: pd.DataFrame) -> pd.DataFrame:
     """Add features that are known before the forecast day.
@@ -57,17 +67,16 @@ def add_known_features(df: pd.DataFrame) -> pd.DataFrame:
         flag = is_event(df)
         df[f"DaysSince{name}"] = _days_to_event(df, flag, direction="since")
         df[f"DaysUntil{name}"] = _days_to_event(df, flag, direction="until")
-    for col in ["StoreType", "Assortment", "StateHoliday"]:
-        df[col] = df[col].astype("category")
+    for col, cats in CATEGORIES.items():
+        df[col] = pd.Categorical(df[col], categories=cats)
     return df
 
 
 def prepare(train: pd.DataFrame, test: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Add known features to train and test together, then split them again.
 
-    Doing it on the combined frame also keeps category codes identical in
-    both: test has no StateHoliday 'b' or 'c', so categorising it separately
-    would give 'a' a different code than in train.
+    Combined, so event distances on the last training days can see the
+    test period's holidays and promos (see `add_known_features`).
     """
     full = add_known_features(pd.concat([train, test], ignore_index=True))
     is_train = full["Sales"].notna()
