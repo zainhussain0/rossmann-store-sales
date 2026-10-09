@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from src.metrics import rmspe
+
 HORIZON = 48  # days in test.csv: 2015-08-01 to 2015-09-17
 
 
@@ -85,3 +87,17 @@ def split(df: pd.DataFrame, fold: Fold) -> tuple[pd.DataFrame, pd.DataFrame]:
     # Cheap guard against a leak if the logic above is ever edited.
     assert train["Date"].max() < val["Date"].min(), f"{fold.name}: train overlaps val"
     return train.reset_index(drop=True), val.reset_index(drop=True)
+
+
+def cross_validate(make_model, df: pd.DataFrame, folds: list[Fold]) -> pd.DataFrame:
+    """Fit a fresh model per fold and score it with RMSPE.
+
+    `make_model` is a zero-argument function returning an unfitted model, so
+    no fitted state can carry over from one fold into the next.
+    """
+    rows = []
+    for fold in folds:
+        train, val = split(df, fold)
+        pred = make_model().fit(train).predict(val)
+        rows.append({"fold": fold.name, "rmspe": rmspe(val["Sales"], pred)})
+    return pd.DataFrame(rows)
