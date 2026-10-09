@@ -46,10 +46,12 @@ def load_or_train(path: Path = ARTIFACT, retrain: bool = False) -> GradientBoost
 
 
 def store_forecast(model, raw_train: pd.DataFrame, raw_test: pd.DataFrame, store: int,
-                   changes: dict | None = None, start=None, end=None) -> pd.DataFrame:
+                   changes: dict | None = None, start=None, end=None,
+                   weekdays_only: bool = False) -> pd.DataFrame:
     """Daily forecast for one store over the test window, optionally edited.
 
-    `changes` maps a lever to its new value, applied to days in [start, end].
+    `changes` maps a lever to its new value, applied to days in [start, end]
+    (only Monday to Friday if `weekdays_only`, matching how promos ran).
     The store's features are rebuilt *after* the edit: switching on a promo
     also changes DaysSincePromo / DaysUntilPromo on the surrounding days, and
     leaving those stale would feed the model an impossible combination.
@@ -66,6 +68,8 @@ def store_forecast(model, raw_train: pd.DataFrame, raw_test: pd.DataFrame, store
         if unknown:
             raise ValueError(f"Not a controllable lever: {sorted(unknown)}. Use {sorted(LEVERS)}")
         in_window = future["Date"].between(pd.Timestamp(start), pd.Timestamp(end))
+        if weekdays_only:
+            in_window &= future["DayOfWeek"] <= 5
         for col, value in changes.items():
             future.loc[in_window, col] = value
         _check_in_distribution(future)
@@ -94,14 +98,14 @@ def _check_in_distribution(future: pd.DataFrame) -> None:
 
 
 def compare(model, raw_train: pd.DataFrame, raw_test: pd.DataFrame, store: int,
-            changes: dict, start, end) -> tuple[pd.DataFrame, dict]:
+            changes: dict, start, end, weekdays_only: bool = False) -> tuple[pd.DataFrame, dict]:
     """Planned vs scenario forecast, per day and in total.
 
     Totals cover the *whole* 48-day window, not just the edited days, because
     effects spill over: a promo can pull sales forward from the days after it.
     """
     plan = store_forecast(model, raw_train, raw_test, store)
-    alt = store_forecast(model, raw_train, raw_test, store, changes, start, end)
+    alt = store_forecast(model, raw_train, raw_test, store, changes, start, end, weekdays_only)
     daily = plan.rename(columns={"Forecast": "Planned"}).assign(
         Scenario=alt["Forecast"].values,
         ScenarioPromo=alt["Promo"].values,

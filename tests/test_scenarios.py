@@ -44,3 +44,13 @@ def test_rejects_non_levers_weekend_promos_and_unknown_stores(setup):
         store_forecast(model, raw_train, raw_test, 1, {"Promo": 1}, "2015-08-08", "2015-08-08")  # Saturday
     with pytest.raises(ValueError, match="not in the forecast window"):
         store_forecast(model, raw_train, raw_test, 2)  # store 2 isn't in test.csv
+
+
+def test_weekdays_only_skips_the_weekend(setup):
+    model, raw_train, raw_test, _ = setup
+    # 2015-08-10 (Mon) to 2015-08-16 (Sun): a full week would be rejected without the flag.
+    fc = store_forecast(model, raw_train, raw_test, 1, {"Promo": 1}, "2015-08-10", "2015-08-16",
+                        weekdays_only=True)
+    week = fc[fc["Date"].between("2015-08-10", "2015-08-16")]
+    assert week.loc[week["DayOfWeek"] <= 5, "Promo"].eq(1).all()
+    assert week.loc[week["DayOfWeek"] >= 6, "Promo"].eq(0).all()
